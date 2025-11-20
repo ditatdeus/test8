@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# AOL DESKTOP ENVIRONMENT INSTALLER (AOL DE)
-# Target: Linux Mint 22 (Ubuntu 24.04 Base)
-# Author: Senior Linux Desktop Engineer (Gemini)
-# Description: Transforms XFCE base into an Openbox/Tint2 AOL 7.0 replica.
+# AOL DESKTOP ENVIRONMENT INSTALLER (Complete Edition)
+# Target: Linux Mint 22 / Ubuntu 24.04 Base
+# Description: Transforms XFCE/Gnome base into an AOL 7.0 replica.
+# Features: Chicago95 Theme, Giant AOL Toolbar, "You Have Mail" Welcome Screen.
 # ==============================================================================
 
 set -e
@@ -12,43 +12,54 @@ set -e
 USER_HOME=$(eval echo ~${SUDO_USER:-$USER})
 USER_NAME=${SUDO_USER:-$USER}
 
-# Ensure script is not run as root directly, but has sudo access
+# ------------------------------------------------------------------------------
+# PRE-FLIGHT CHECKS
+# ------------------------------------------------------------------------------
 if [ "$EUID" -eq 0 ]; then 
-    echo "Please run this script as your normal user (not root). Sudo will be requested when needed."
+    echo "STOP: Please run this script as your normal user (./install_aol.sh)."
+    echo "Sudo password will be requested only when installing packages."
     exit 1
 fi
 
+echo "==========================================================="
 echo "[*] Initializing AOL Desktop Environment Setup..."
+echo "==========================================================="
 
-# ==============================================================================
-# 1. SYSTEM PREP & DEPENDENCIES
-# ==============================================================================
-echo "[*] Installing dependencies..."
+# ------------------------------------------------------------------------------
+# 1. INSTALL DEPENDENCIES
+# ------------------------------------------------------------------------------
+echo "[*] Installing system dependencies..."
 sudo apt update -q
-sudo apt install -y openbox tint2 jgmenu feh wmctrl firefox thunderbird pidgin git python3-tk python3-pil python3-pil.imagetk build-essential libgdk-pixbuf2.0-dev
+# Added imagemagick to generate the custom AOL icons programmatically
+sudo apt install -y openbox tint2 jgmenu feh wmctrl firefox thunderbird pidgin \
+    git python3-tk python3-pil python3-pil.imagetk build-essential \
+    libgdk-pixbuf2.0-dev imagemagick libcanberra-gtk-module vorbis-tools \
+    alsa-utils
 
-# Directories
+# Create Directory Structure
+echo "[*] Creating directory structure..."
 mkdir -p "$USER_HOME/.config/openbox"
 mkdir -p "$USER_HOME/.config/tint2"
 mkdir -p "$USER_HOME/.config/jgmenu"
 mkdir -p "$USER_HOME/.config/gtk-3.0"
 mkdir -p "$USER_HOME/.themes"
-mkdir -p "$USER_HOME/.icons"
+mkdir -p "$USER_HOME/.icons/aol-custom"
 mkdir -p "$USER_HOME/.local/bin"
+mkdir -p "$USER_HOME/.local/share/applications"
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 # 2. THEME INSTALLATION (Chicago95)
-# ==============================================================================
-echo "[*] Cloning and installing Chicago95 Theme..."
+# ------------------------------------------------------------------------------
+echo "[*] Installing Chicago95 Theme (Windows 95 aesthetic)..."
 if [ ! -d "/tmp/Chicago95" ]; then
     git clone https://github.com/grassmunk/Chicago95.git /tmp/Chicago95
 fi
 
 # Install GTK Theme and Icons
-cp -r /tmp/Chicago95/Theme/Chicago95 "$USER_HOME/.themes/"
-cp -r /tmp/Chicago95/Icons/* "$USER_HOME/.icons/"
+cp -r /tmp/Chicago95/Theme/Chicago95 "$USER_HOME/.themes/" 2>/dev/null || true
+cp -r /tmp/Chicago95/Icons/* "$USER_HOME/.icons/" 2>/dev/null || true
 
-# Force GTK Settings for the Session (Make it look gray/beveled)
+# Force GTK Settings (Gray/Beveled Look)
 cat <<EOF > "$USER_HOME/.config/gtk-3.0/settings.ini"
 [Settings]
 gtk-theme-name=Chicago95
@@ -58,7 +69,7 @@ gtk-cursor-theme-name=Chicago95
 gtk-decoration-layout=menu:minimize,maximize,close
 EOF
 
-# Create .gtkrc-2.0 for legacy apps
+# Legacy GTK2 settings
 cat <<EOF > "$USER_HOME/.gtkrc-2.0"
 gtk-theme-name="Chicago95"
 gtk-icon-theme-name="Chicago95"
@@ -66,148 +77,119 @@ gtk-font-name="Sans 10"
 gtk-cursor-theme-name="Chicago95"
 EOF
 
-# ==============================================================================
-# 3. THE 'AOL TOOLBAR' (Tint2 Configuration)
-# ==============================================================================
-echo "[*] Configuring Tint2 (AOL Toolbar)..."
+# ------------------------------------------------------------------------------
+# 3. GENERATE AOL ASSETS (ICONS)
+# ------------------------------------------------------------------------------
+echo "[*] Generating Custom AOL Icons..."
 
-# We need to locate the .desktop files to link them in tint2
-# This configuration mimics the thick gray header bar of AOL 6.0
+# Mail Icon (Yellow with Blue center)
+convert -size 48x48 xc:yellow -fill blue -draw "circle 24,24 10,10" "$USER_HOME/.icons/aol-custom/mail.png"
+# People Icon (Blue with White center)
+convert -size 48x48 xc:blue -fill white -draw "circle 24,24 20,20" "$USER_HOME/.icons/aol-custom/people.png"
+# Channels Icon (Green)
+convert -size 48x48 xc:green -fill white -draw "rectangle 10,20 38,28" "$USER_HOME/.icons/aol-custom/channels.png"
+# Favorites Icon (Red Heart-ish)
+convert -size 48x48 xc:transparent -fill red -draw "circle 24,24 20,20" "$USER_HOME/.icons/aol-custom/favorites.png"
+
+# Create Custom Desktop Entries for the Toolbar
+cat <<EOF > "$USER_HOME/.local/share/applications/aol-mail.desktop"
+[Desktop Entry]
+Name=Read Mail
+Exec=thunderbird
+Icon=$USER_HOME/.icons/aol-custom/mail.png
+Type=Application
+EOF
+
+cat <<EOF > "$USER_HOME/.local/share/applications/aol-people.desktop"
+[Desktop Entry]
+Name=People Connection
+Exec=pidgin
+Icon=$USER_HOME/.icons/aol-custom/people.png
+Type=Application
+EOF
+
+cat <<EOF > "$USER_HOME/.local/share/applications/aol-channels.desktop"
+[Desktop Entry]
+Name=Channels
+Exec=firefox -P AOL
+Icon=$USER_HOME/.icons/aol-custom/channels.png
+Type=Application
+EOF
+
+# ------------------------------------------------------------------------------
+# 4. THE 'AOL TOOLBAR' (Tint2)
+# ------------------------------------------------------------------------------
+echo "[*] Configuring Tint2 (The Big Header Bar)..."
+
 cat <<EOF > "$USER_HOME/.config/tint2/tint2rc"
-# AOL Style Tint2 Config
+# AOL 7.0 Style Header Bar
 
 #-------------------------------------
 # Backgrounds
 #-------------------------------------
-# Background 1: The Main Bar (Silver/Gray)
+# BG 1: The Main Container (AOL Beige/Gray)
 rounded = 0
 border_width = 2
-border_sides = TBLR
-border_content_tint_weight = 0
-background_content_tint_weight = 0
-background_color = #c0c0c0 100
-border_color = #ffffff 60
-background_color_hover = #c0c0c0 100
-border_color_hover = #ffffff 60
-background_color_pressed = #c0c0c0 100
-border_color_pressed = #ffffff 60
-
-# Background 2: Buttons/Taskbar items (Beveled look)
-rounded = 0
-border_width = 1
-border_sides = TBLR
-background_color = #c0c0c0 100
+border_sides = B
+background_color = #d4d0c8 100
 border_color = #808080 100
-background_color_hover = #dcdcdc 100
-border_color_hover = #ffffff 100
-background_color_pressed = #a0a0a0 100
-border_color_pressed = #000000 100
+
+# BG 2: The URL/Keyword Bar (White inset)
+rounded = 2
+border_width = 2
+background_color = #ffffff 100
+border_color = #808080 100
 
 #-------------------------------------
 # Panel
 #-------------------------------------
-panel_items = LTSBC
-panel_size = 100% 54
+# L=Launcher, E=Executor (Fake URL bar), S=Systray, C=Clock
+panel_items = LESC
+# MAKE IT TALL: AOL headers were thick
+panel_size = 100% 74
 panel_margin = 0 0
-panel_padding = 4 4 4
+panel_padding = 5 5 5
 panel_background_id = 1
-wm_menu = 1
+wm_menu = 0
 panel_dock = 0
 panel_position = top center
-panel_layer = normal
-panel_monitor = all
-panel_shrink = 0
-autohide = 0
-autohide_show_timeout = 0
-autohide_hide_timeout = 0.5
-autohide_height = 1
+panel_layer = top
 strut_policy = follow_size
-panel_window_name = tint2
+panel_window_name = aol_bar
 disable_transparency = 1
-mouse_effects = 1
-font_shadow = 0
-mouse_hover_icon_asb = 100 0 10
-mouse_pressed_icon_asb = 100 0 0
-scale_relative_to_dpi = 0
-scale_relative_to_screen_height = 0
 
 #-------------------------------------
-# Taskbar
+# Launcher (The Big Buttons)
 #-------------------------------------
-taskbar_mode = single_desktop
-taskbar_hide_if_empty = 0
-taskbar_padding = 2 2 4
-taskbar_background_id = 0
-taskbar_active_background_id = 2
-taskbar_name = 1
-taskbar_hide_inactive_tasks = 0
-taskbar_hide_different_monitor = 0
-taskbar_hide_different_desktop = 0
-taskbar_always_show_all_desktop_tasks = 0
-taskbar_name_padding = 6 4
-taskbar_name_background_id = 0
-taskbar_name_active_background_id = 0
-taskbar_name_font = Sans Bold 9
-taskbar_name_font_color = #000000 100
-taskbar_name_active_font_color = #000000 100
-taskbar_distribute_size = 0
-taskbar_sort_order = none
-task_align = left
-
-#-------------------------------------
-# Launcher
-#-------------------------------------
-launcher_padding = 8 4 8
+launcher_padding = 15 5 15
 launcher_background_id = 0
 launcher_icon_background_id = 0
-launcher_size = 32
-launcher_icon_size = 32
-launcher_item_app = /usr/share/applications/firefox.desktop
-launcher_item_app = /usr/share/applications/thunderbird.desktop
-launcher_item_app = /usr/share/applications/pidgin.desktop
+launcher_size = 64
+launcher_icon_size = 48
+launcher_item_app = $USER_HOME/.local/share/applications/aol-mail.desktop
+launcher_item_app = $USER_HOME/.local/share/applications/aol-people.desktop
+launcher_item_app = $USER_HOME/.local/share/applications/aol-channels.desktop
 launcher_tooltip = 1
 
 #-------------------------------------
-# Clock
+# Executor (Faking the URL/Keyword Bar)
 #-------------------------------------
-time1_format = %H:%M
-time1_font = Sans Bold 10
-time1_timezone = 
-time1_color = #000000 100
-time1_align_right = 1
-clock_font_color = #000000 100
-clock_padding = 4 4
-clock_background_id = 2
-clock_lclick_command = jgmenu_run
-
-#-------------------------------------
-# Systray
-#-------------------------------------
-systray_padding = 4 2 4
-systray_background_id = 2
-systray_sort = ascending
-systray_icon_size = 22
-systray_icon_asb = 100 0 0
-systray_monitor = 1
-systray_name_filter = 
-
-#-------------------------------------
-# Button (The AOL Start Menu)
-#-------------------------------------
-button = new
-button_icon = /usr/share/icons/Mint-Y/places/64/start-here.png
-button_text = AOL
-button_lclick_command = jgmenu_run
-button_font = Sans Bold 10
-button_font_color = #000000 100
-button_padding = 8 8
-button_background_id = 2
-button_centered = 0
-button_max_icon_size = 24
-
+execp = new
+execp_command = echo "Type Keyword or Web Address here and click Go"
+execp_interval = 0
+execp_has_icon = 0
+execp_cache_icon = 0
+execp_continuous = 0
+execp_markup = 1
+execp_font = Sans 12
+execp_font_color = #555555 100
+execp_padding = 10 15
+execp_background_id = 2
+execp_centered = 0
+execp_lclick_command = firefox -P AOL
 EOF
 
-# Configure JGMenu (The Dropdown) to look like Win95
+# JGMenu Config (Right click menu)
 cat <<EOF > "$USER_HOME/.config/jgmenu/jgmenurc"
 tint2_look = 1
 color_menu_bg = #c0c0c0 100
@@ -217,16 +199,15 @@ color_sel_fg = #ffffff 100
 font = Sans 10
 EOF
 
-# ==============================================================================
-# 4. THE 'AOL BROWSER' (Firefox Customization)
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# 5. THE 'AOL BROWSER' (Firefox Customization)
+# ------------------------------------------------------------------------------
 echo "[*] Configuring Firefox as 'AOL Internal Browser'..."
 
-# Create a specific profile directory manually to avoid needing GUI
 FF_PROFILE_DIR="$USER_HOME/.mozilla/firefox/aol_desktop.default"
 mkdir -p "$FF_PROFILE_DIR/chrome"
 
-# Update profiles.ini to register it
+# Register Profile
 if [ ! -f "$USER_HOME/.mozilla/firefox/profiles.ini" ]; then
     mkdir -p "$USER_HOME/.mozilla/firefox"
     cat <<EOF > "$USER_HOME/.mozilla/firefox/profiles.ini"
@@ -246,29 +227,20 @@ fi
 cat <<EOF > "$FF_PROFILE_DIR/user.js"
 user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
 user_pref("browser.tabs.drawInTitlebar", true);
+user_pref("browser.startup.homepage", "about:blank");
 EOF
 
-# The CSS to remove standard browser elements and make it look like a content frame
+# CSS to hide tabs and nav bar (Since Tint2 acts as the nav bar)
 cat <<EOF > "$FF_PROFILE_DIR/chrome/userChrome.css"
-/* AOL Style: Hide Tabs and minimal URL bar */
+/* AOL Style: Hide Tabs and UI to make it look like an embedded window */
 #TabsToolbar { visibility: collapse !important; }
 #sidebar-header { display: none !important; }
-
-/* Make the nav bar look blocky and gray */
-#nav-bar {
-    background-color: #c0c0c0 !important;
-    border-bottom: 1px solid #808080 !important;
-    box-shadow: none !important;
-}
-
-#urlbar-container {
-    border: 2px inset #dfdfdf !important;
-}
+#nav-bar { visibility: collapse !important; }
 EOF
 
-# ==============================================================================
-# 5. THE 'WELCOME SCREEN' (Python/Tkinter)
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# 6. THE WELCOME SCREEN (Python/Tkinter)
+# ------------------------------------------------------------------------------
 echo "[*] Creating 'Welcome' Application..."
 
 cat <<EOF > "$USER_HOME/.local/bin/aol-welcome"
@@ -276,71 +248,94 @@ cat <<EOF > "$USER_HOME/.local/bin/aol-welcome"
 import tkinter as tk
 from tkinter import font
 import os
+import subprocess
 
-def launch_browser():
-    os.system("firefox -P AOL &")
+def launch_browser(url=""):
+    cmd = "firefox -P AOL"
+    if url:
+        cmd += f" {url} &"
+    else:
+        cmd += " &"
+    os.system(cmd)
 
 def launch_mail():
     os.system("thunderbird &")
 
+def play_sound():
+    try:
+        # Attempt to play standard login sound
+        subprocess.Popen(["paplay", "/usr/share/sounds/freedesktop/stereo/service-login.oga"])
+    except:
+        pass
+
 root = tk.Tk()
-root.title("Welcome!")
-root.geometry("600x400")
-root.configure(bg="#ffffff")
+root.title("Welcome")
+root.geometry("720x500")
+root.configure(bg="#d4d0c8")
 
-# Banner
-header = tk.Frame(root, bg="#003399", height=80)
-header.pack(fill="x")
-lbl_title = tk.Label(header, text="Welcome, User!", bg="#003399", fg="white", font=("Arial", 24, "bold"))
-lbl_title.place(x=20, y=20)
+# Play sound
+root.after(500, play_sound)
 
-# Main Content
-content = tk.Frame(root, bg="#c0c0c0")
-content.pack(fill="both", expand=True, padx=10, pady=10)
+# -- HEADER --
+header = tk.Frame(root, bg="white", height=60, highlightthickness=1, highlightbackground="#808080")
+header.pack(fill="x", padx=5, pady=5)
+lbl_logo = tk.Label(header, text="AOL Service", bg="white", fg="black", font=("Times New Roman", 24, "bold italic"))
+lbl_logo.pack(side="left", padx=20)
 
-# Mail Notification
-lbl_mail = tk.Label(content, text="YOU HAVE MAIL", bg="#c0c0c0", fg="#003399", font=("Arial", 16, "bold"))
-lbl_mail.pack(pady=20)
+# -- MAIN CONTAINER --
+main_frame = tk.Frame(root, bg="#d4d0c8")
+main_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-btn_mail = tk.Button(content, text="Read Mail", command=launch_mail, relief="raised", borderwidth=3)
-btn_mail.pack(pady=5)
+# -- LEFT COLUMN (Big Buttons) --
+left_col = tk.Frame(main_frame, bg="#d4d0c8", width=250)
+left_col.pack(side="left", fill="y", padx=5)
 
-# Fake News
-separator = tk.Frame(content, height=2, bd=1, relief="sunken")
-separator.pack(fill="x", padx=20, pady=20)
+# Mail Button
+btn_mail_frame = tk.Frame(left_col, bg="#d4d0c8", bd=2, relief="raised")
+btn_mail_frame.pack(fill="x", pady=5)
+lbl_mail_icon = tk.Label(btn_mail_frame, text="✉", font=("Arial", 40), bg="#d4d0c8", fg="#d4a010")
+lbl_mail_icon.pack()
+btn_mail = tk.Button(btn_mail_frame, text="YOU HAVE MAIL", command=launch_mail, font=("Arial", 11, "bold"), bg="#d4d0c8", relief="flat")
+btn_mail.pack(fill="x")
 
-lbl_news = tk.Label(content, text="Today's Headlines:", bg="#c0c0c0", font=("Arial", 12, "bold"))
-lbl_news.pack(anchor="w", padx=20)
+# Pictures Button
+btn_pix_frame = tk.Frame(left_col, bg="#d4d0c8", bd=2, relief="raised")
+btn_pix_frame.pack(fill="x", pady=5)
+lbl_pix_icon = tk.Label(btn_pix_frame, text="📷", font=("Arial", 30), bg="#d4d0c8", fg="purple")
+lbl_pix_icon.pack()
+btn_pix = tk.Button(btn_pix_frame, text="You Have Pictures", font=("Arial", 10), bg="#d4d0c8", relief="flat")
+btn_pix.pack(fill="x")
 
-news_items = [
-    "DOT COM BUBBLE: Is it finally over?",
-    "Napster faces new legal challenges",
-    "Top 10 tips for your Palm Pilot"
-]
+# -- RIGHT COLUMN (Content) --
+right_col = tk.Frame(main_frame, bg="#ffffff", bd=2, relief="sunken")
+right_col.pack(side="right", fill="both", expand=True, padx=5)
 
-for item in news_items:
-    lbl = tk.Label(content, text="> " + item, bg="#c0c0c0", fg="blue", cursor="hand2", font=("Arial", 10, "underline"))
-    lbl.pack(anchor="w", padx=30)
-    lbl.bind("<Button-1>", lambda e: launch_browser())
+lbl_top_news = tk.Label(right_col, text=" TOP NEWS STORY", bg="#003366", fg="white", font=("Arial", 10, "bold"), anchor="w")
+lbl_top_news.pack(fill="x")
+
+lbl_headline = tk.Label(right_col, text="System Upgrade Complete", bg="white", fg="black", font=("Arial", 16, "bold"), wraplength=350, justify="left")
+lbl_headline.pack(anchor="w", padx=10, pady=15)
+
+lbl_sub = tk.Label(right_col, text="Your Linux system has been successfully transformed into a Classic Online Experience.", bg="white", fg="black", font=("Arial", 10), wraplength=350, justify="left")
+lbl_sub.pack(anchor="w", padx=10)
+
+btn_read_more = tk.Button(right_col, text="Go to Web", command=lambda: launch_browser("https://google.com"), fg="blue", bg="white", relief="flat", cursor="hand2")
+btn_read_more.pack(anchor="w", padx=10, pady=20)
 
 root.mainloop()
 EOF
 chmod +x "$USER_HOME/.local/bin/aol-welcome"
 
-# ==============================================================================
-# 6. OPENBOX CONFIGURATION (rc.xml)
-# ==============================================================================
-echo "[*] Configuring Openbox..."
+# ------------------------------------------------------------------------------
+# 7. OPENBOX CONFIGURATION
+# ------------------------------------------------------------------------------
+echo "[*] Configuring Openbox Window Manager..."
 
-# Copy default configuration first if it doesn't exist
 if [ ! -f "$USER_HOME/.config/openbox/rc.xml" ]; then
     cp /etc/xdg/openbox/rc.xml "$USER_HOME/.config/openbox/rc.xml" || true
 fi
 
-# NOTE: Properly parsing XML in bash is hard. We will overwrite the rc.xml 
-# with a focused configuration that imports the Chicago95 theme and manages the Panel.
-# If you have a complex existing openbox setup, back it up.
-
+# Overwrite with AOL-specific window settings
 cat <<EOF > "$USER_HOME/.config/openbox/rc.xml"
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc" xmlns:xi="http://www.w3.org/2001/XInclude">
@@ -348,120 +343,68 @@ cat <<EOF > "$USER_HOME/.config/openbox/rc.xml"
     <name>Chicago95</name>
     <titleLayout>ILMC</titleLayout>
     <keepBorder>yes</keepBorder>
-    <animateIconify>yes</animateIconify>
     <font place="ActiveWindow">
-      <name>Sans</name>
-      <size>10</size>
-      <weight>Bold</weight>
-      <slant>Normal</slant>
+      <name>Sans</name><size>10</size><weight>Bold</weight>
     </font>
     <font place="InactiveWindow">
-      <name>Sans</name>
-      <size>10</size>
-      <weight>Normal</weight>
-      <slant>Normal</slant>
+      <name>Sans</name><size>10</size><weight>Normal</weight>
     </font>
   </theme>
   <desktops>
     <number>1</number>
-    <firstdesk>1</firstdesk>
-    <names>
-      <name>AOL Desktop</name>
-    </names>
+    <names><name>AOL Desktop</name></names>
   </desktops>
-  <resize>
-    <drawContents>yes</drawContents>
-    <popupShow>Nonpixel</popupShow>
-    <popupPosition>Center</popupPosition>
-  </resize>
   <dock>
     <position>Top</position>
-    <floatingX>0</floatingX>
-    <floatingY>0</floatingY>
-    <noStrut>no</noStrut>
     <stacking>Above</stacking>
-    <direction>Horizontal</direction>
     <autoHide>no</autoHide>
-    <hideDelay>300</hideDelay>
-    <showDelay>300</showDelay>
-    <moveButton>Middle</moveButton>
   </dock>
-  <keyboard>
-    <chainQuitKey>C-g</chainQuitKey>
-    <keybind key="A-F4"><action name="Close"/></keybind>
-    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
-    <keybind key="A-S-Tab"><action name="PreviousWindow"/></keybind>
-    <keybind key="W-e"><action name="Execute"><command>thunar</command></action></keybind>
-  </keyboard>
   <mouse>
-    <dragThreshold>1</dragThreshold>
-    <doubleClickTime>500</doubleClickTime>
-    <screenEdgeWarpTime>400</screenEdgeWarpTime>
-    <screenEdgeWarpMouse>false</screenEdgeWarpMouse>
     <context name="Frame">
-      <mousebind button="A-Left" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
-      <mousebind button="A-Left" action="Click">
-        <action name="Unshade"/>
-      </mousebind>
-      <mousebind button="A-Left" action="Drag">
-        <action name="Move"/>
-      </mousebind>
       <mousebind button="A-Right" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-        <action name="ShowMenu"><menu>client-menu</menu></action>
+        <action name="ShowMenu"><menu>root-menu</menu></action>
       </mousebind>
+    </context>
+    <context name="Root">
+       <mousebind button="Right" action="Press">
+         <action name="Execute"><command>jgmenu_run</command></action>
+       </mousebind>
     </context>
   </mouse>
   <applications>
-    <application class="tint2">
-      <decor>no</decor>
-      <layer>above</layer>
-    </application>
-    <application title="Welcome!">
-      <position force="yes">
-        <x>center</x>
-        <y>center</y>
-      </position>
+    <application title="Welcome">
+      <position force="yes"><x>center</x><y>center</y></position>
       <decor>yes</decor>
     </application>
   </applications>
 </openbox_config>
 EOF
 
-# ==============================================================================
-# 7. SESSION HIJACK (Startup Scripts)
-# ==============================================================================
-echo "[*] Creating Startup Script and Session file..."
+# ------------------------------------------------------------------------------
+# 8. STARTUP SCRIPT & SESSION
+# ------------------------------------------------------------------------------
+echo "[*] Creating Session Startup Scripts..."
 
-# The script that runs when the session starts
 cat <<EOF > "$USER_HOME/.local/bin/start_aol_env.sh"
 #!/bin/bash
 
 # 1. Apply GTK Theme explicitly
 export GTK2_RC_FILES="$USER_HOME/.gtkrc-2.0"
-/usr/lib/x86_64-linux-gnu/xfce4/notifyd/xfce4-notifyd &
 
-# 2. Set Background (AOL Blue #5080b0)
-feh --bg-fill --no-fehbg --image-bg "#5080b0" /usr/share/backgrounds/xfce/xfce-blue.jpg
-# Actually, force solid color by using a small solid tile or just xsetroot if feh fails on color alone
-xsetroot -solid "#5080b0"
+# 2. Set Background (MDI Grey #808080 - The classic Windows 'Application Workspace' color)
+# This mimics the background of the AOL MDI window.
+xsetroot -solid "#808080"
 
-# 3. Network Manager Applet
-nm-applet &
-
-# 4. Start Tint2 (The Panel)
+# 3. Start Tint2 (The AOL Toolbar)
 tint2 &
 
-# 5. Start Openbox
+# 4. Start Openbox (Window Manager)
+# Launch the Welcome Screen immediately upon Openbox start
 openbox --startup "$USER_HOME/.local/bin/aol-welcome"
 EOF
 chmod +x "$USER_HOME/.local/bin/start_aol_env.sh"
 
-# The XSession entry (Requires Root)
+# Create Login Manager Entry
 sudo bash -c "cat <<EOF > /usr/share/xsessions/aol-desktop.desktop
 [Desktop Entry]
 Name=AOL Desktop
@@ -471,19 +414,17 @@ Type=Application
 DesktopNames=AOL
 EOF"
 
-# ==============================================================================
-# 8. COMPLETION
-# ==============================================================================
-
+# ------------------------------------------------------------------------------
+# 9. FINISH
+# ------------------------------------------------------------------------------
 echo "==========================================================="
-echo "  AOL DESKTOP SETUP COMPLETE"
+echo "   AOL DESKTOP SETUP COMPLETE"
 echo "==========================================================="
-echo "Next Steps:"
-echo "1. Save any open work."
-echo "2. Log out of your current session."
-echo "3. At the Login Screen, click the Session icon (Gear/Logo)."
-echo "4. Select 'AOL Desktop'."
-echo "5. Log in."
+echo "To enter the AOL Environment:"
+echo "1. Save your work and LOG OUT."
+echo "2. At the login screen, click the Gear/Session icon."
+echo "3. Select 'AOL Desktop'."
+echo "4. Login."
 echo ""
-echo "To revert: Select 'Xfce Session' at the login screen."
+echo "To exit: Right-click the desktop background -> Log Out."
 echo "==========================================================="
