@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==============================================================================
-# AOL 7.0 Desktop Environment Installer – FIXED & IMPROVED (2025 edition)
+# AOL 7.0 Desktop Environment Installer – FINAL VERSION (No paplay dependency)
 # Target: Linux Mint 22 / 22.1 (XFCE) or Ubuntu 24.04
-# Turns the machine into a convincing AOL 7.0 look-alike
+# Date: November 2025
 # ==============================================================================
 
 set -e
@@ -10,28 +10,24 @@ set -e
 USER_HOME=$(eval echo ~${SUDO_USER:-$USER})
 USER_NAME=${SUDO_USER:-$USER}
 
-# ----------------------------------------------------------------------
-# Pre-flight
-# ----------------------------------------------------------------------
 if [ "$EUID" -eq 0 ]; then
     echo "Do not run as root. Run as normal user."
     exit 1
 fi
 
 echo "==========================================================="
-echo "   AOL 7.0 Desktop Environment Installer (Fixed 2025)"
+echo "   AOL 7.0 Desktop Environment Installer (Final – No paplay)"
 echo "==========================================================="
 
 # ----------------------------------------------------------------------
-# 1. Dependencies
+# 1. Dependencies (pulseaudio-utils removed)
 # ----------------------------------------------------------------------
-echo "[*] Installing dependencies..."
 sudo apt update -q
 sudo apt install -y openbox obconf tint2 jgmenu feh wmctrl volumeicon-alsa \
     firefox thunderbird pidgin pidgin-plugin-pack \
     git python3-tk python3-pil python3-pil.imagetk \
     imagemagick xdotool curl libcanberra-gtk-module \
-    alsa-utils paplay
+    alsa-utils
 
 # ----------------------------------------------------------------------
 # 2. Directory structure
@@ -42,9 +38,9 @@ mkdir -p "$USER_HOME/.local/bin" "$USER_HOME/.local/share/applications"
 mkdir -p "$USER_HOME/.cache/aol"
 
 # ----------------------------------------------------------------------
-# 3. Chicago95 theme + icons (latest 2025 fork with bugfixes)
+# 3. Chicago95 theme
 # ----------------------------------------------------------------------
-echo "[*] Installing Chicago95 Plus (fixed XFCE-compatible version)..."
+echo "[*] Installing Chicago95 theme..."
 if [ ! -d "/tmp/Chicago95" ]; then
     git clone https://github.com/grassmunk/Chicago95.git /tmp/Chicago95
 fi
@@ -52,7 +48,6 @@ cp -r /tmp/Chicago95/Theme/Chicago95 "$USER_HOME/.themes/"
 cp -r /tmp/Chicago95/Icons/Chicago95 "$USER_HOME/.icons/"
 cp -r /tmp/Chicago95/Icons/Chicago95-cursors "$USER_HOME/.icons/" 2>/dev/null || true
 
-# GTK settings
 cat <<EOF > "$USER_HOME/.config/gtk-3.0/settings.ini"
 [Settings]
 gtk-theme-name=Chicago95
@@ -72,14 +67,16 @@ gtk-font-name = "MS Sans Serif 8"
 EOF
 
 # ----------------------------------------------------------------------
-# 4. Real AOL icons + sound
+# 4. AOL icons + welcome sound (optional)
 # ----------------------------------------------------------------------
-echo "[*] Downloading authentic AOL assets..."
-curl -sL https://winworldpc.com/download/c39fc29c-18c2-11e7-8080-800020c7487f -o /tmp/aol70.zip
-unzip -qj /tmp/aol70.zip "AOL 7.0/*.wav" -d "$USER_HOME/.cache/aol/" 2>/dev/null || true
-[ -f "$USER_HOME/.cache/aol/welcome.wav" ] || cp /usr/share/sounds/freedesktop/stereo/complete.oga "$USER_HOME/.cache/aol/welcome.wav"
+echo "[*] Downloading AOL assets (icons + sound)..."
+curl -sL https://winworldpc.com/download/c39fc29c-18c2-11e7-8080-800020c7487f -o /tmp/aol70.zip 2>/dev/null || true
 
-# Convert classic AOL icons from the Windows version (48×48)
+# Extract real welcome sound if possible
+unzip -qj /tmp/aol70.zip "AOL 7.0/*.wav" -d "$USER_HOME/.cache/aol/" 2>/dev/null || true
+[ -f "$USER_HOME/.cache/aol/welcome.wav" ] || true  # silent if missing
+
+# Icons (real ones from AOL 7.0 if available, fallback to generated)
 convert "/tmp/aol70.zip[AOL 7.0/art/mail.ico]" -resize 48x48 "$USER_HOME/.icons/aol-custom/mail.png" 2>/dev/null || \
     convert -size 48x48 xc:#ffcc00 -fill blue -draw "circle 24,24 10,10" "$USER_HOME/.icons/aol-custom/mail.png"
 convert "/tmp/aol70.zip[AOL 7.0/art/buddy.ico]" -resize 48x48 "$USER_HOME/.icons/aol-custom/people.png" 2>/dev/null || \
@@ -88,7 +85,7 @@ convert -size 48x48 xc:#00cc00 -fill white -draw "rectangle 10,20 38,28" "$USER_
 convert -size 48x48 xc:none -fill red -draw "path 'M24,12 Q12,24 24,36 Q36,24 24,12 Z'" "$USER_HOME/.icons/aol-custom/favorites.png"
 
 # ----------------------------------------------------------------------
-# 5. Desktop entries for the toolbar
+# 5. Desktop entries
 # ----------------------------------------------------------------------
 cat <<EOF > "$USER_HOME/.local/share/applications/aol-mail.desktop"
 [Desktop Entry]
@@ -115,10 +112,9 @@ Type=Application
 EOF
 
 # ----------------------------------------------------------------------
-# 6. Fixed Tint2 configuration (real taskbar, proper height, clickable URL bar)
+# 6. Tint2 (AOL toolbar)
 # ----------------------------------------------------------------------
 cat <<EOF > "$USER_HOME/.config/tint2/tint2rc"
-# AOL 7.0 Toolbar – Fixed 2025
 rounded = 0
 border_width = 2
 border_sides = B
@@ -135,15 +131,10 @@ strut_policy = follow_size
 disable_transparency = 1
 wm_menu = 0
 taskbar_mode = multi_desktop
-
-# Taskbar look
 taskbar_padding = 4 2 4
 task_icon = 1
 task_text = 0
-task_maximum_size = 140 32
-task_padding = 4 2
 
-# Launcher icons (huge AOL buttons)
 launcher_padding = 10 0 20
 launcher_background_id = 0
 launcher_icon_size = 64
@@ -151,16 +142,13 @@ launcher_item_app = $USER_HOME/.local/share/applications/aol-mail.desktop
 launcher_item_app = $USER_HOME/.local/share/applications/aol-people.desktop
 launcher_item_app = $USER_HOME/.local/share/applications/aol-browser.desktop
 
-# Clock
 time1_format = %l:%M %p
 time1_font = MS Sans Serif Bold 10
 clock_padding = 8 2
 
-# System tray + volume
 systray_padding = 8 2 8
 systray_icon_size = 24
 
-# Fake address bar (click to open Firefox)
 execp = new
 execp_command = echo "Keyword or Web Address"
 execp_font = MS Sans Serif 11
@@ -172,7 +160,7 @@ execp_tooltip = Click to open Internet
 EOF
 
 # ----------------------------------------------------------------------
-# 7. Openbox configuration (proper session handling)
+# 7. Openbox
 # ----------------------------------------------------------------------
 cp /etc/xdg/openbox/rc.xml "$USER_HOME/.config/openbox/rc.xml" 2>/dev/null || true
 cat <<EOF > "$USER_HOME/.config/openbox/rc.xml"
@@ -190,17 +178,10 @@ cat <<EOF > "$USER_HOME/.config/openbox/rc.xml"
     <position>Top</position>
     <autohide>no</autohide>
   </dock>
-  <applications>
-    <application name="firefox">
-      <decor>yes</decor>
-      <maximized>yes</maximized>
-    </application>
-  </applications>
 </openbox_config>
 EOF
 
 cat <<EOF > "$USER_HOME/.config/openbox/autostart"
-# AOL Environment autostart
 feh --bg-fill /usr/share/backgrounds/linuxmint/default_background.jpg || xsetroot -solid "#008080" &
 tint2 &
 volumeicon &
@@ -208,29 +189,27 @@ volumeicon &
 EOF
 
 # ----------------------------------------------------------------------
-# 8. Fixed welcome screen with real AOL sound
+# 8. Welcome screen – NOW USES aplay (Option 1 applied)
 # ----------------------------------------------------------------------
 cat <<'EOF' > "$USER_HOME/.local/bin/aol-welcome"
 #!/usr/bin/python3
-import tkinter as tk, os, subprocess, time
+import tkinter as tk, os, subprocess
+
 def play_wav():
     f = os.path.expanduser("~/.cache/aol/welcome.wav")
     if os.path.exists(f):
-        subprocess.Popen(["paplay", f])
-    else:
-        subprocess.Popen(["paplay", "/usr/share/sounds/freedesktop/stereo/service-login.oga"])
+        subprocess.Popen(["aplay", "-q", f])
+
 root = tk.Tk()
 root.title("Welcome to AOL 7.0")
 root.geometry("760x520")
 root.configure(bg="#d4d0c8")
 root.after(300, play_wav)
 
-# Logo header
 head = tk.Frame(root, bg="white", height=70)
 head.pack(fill="x", padx=8, pady=8)
 tk.Label(head, text="America Online", font=("Times New Roman", 28, "bold italic"), bg="white").pack(side="left", padx=20)
 
-# Main area
 main = tk.Frame(root, bg="#d4d0c8")
 main.pack(fill="both", expand=True)
 
@@ -251,20 +230,22 @@ EOF
 chmod +x "$USER_HOME/.local/bin/aol-welcome"
 
 # ----------------------------------------------------------------------
-# 9. Firefox AOL profile (properly created if missing)
+# 9. Firefox profile
 # ----------------------------------------------------------------------
 FF_BASE="$USER_HOME/.mozilla/firefox"
 mkdir -p "$FF_BASE"
 if ! grep -q "AOL" "$FF_BASE/profiles.ini" 2>/dev/null; then
-    PROF=$(firefox -CreateProfile "AOL $FF_BASE/aol.profile" | grep -o 'aol\.profile[^"]*')
-    echo "[Profile0]
+    PROF=$(firefox -CreateProfile "AOL $FF_BASE/aol.profile" | grep -o 'aol\.profile[^ ]*')
+    cat > "$FF_BASE/profiles.ini" <<EOF
+[Profile0]
 Name=AOL
 IsRelative=1
 Path=$PROF
 Default=1
 
 [General]
-StartWithLastProfile=1" > "$FF_BASE/profiles.ini"
+StartWithLastProfile=1
+EOF
 else
     PROF=$(grep Path= "$FF_BASE/profiles.ini" | grep AOL | cut -d= -f2)
 fi
@@ -283,7 +264,7 @@ cat <<EOF > "$FF_PROFILE/chrome/userChrome.css"
 EOF
 
 # ----------------------------------------------------------------------
-# 10. Session entry (fixed path)
+# 10. Session + startup script
 # ----------------------------------------------------------------------
 sudo tee /usr/share/xsessions/aol7.desktop > /dev/null <<EOF
 [Desktop Entry]
@@ -295,9 +276,6 @@ Type=Application
 DesktopNames=AOL
 EOF
 
-# ----------------------------------------------------------------------
-# 11. Final startup script
-# ----------------------------------------------------------------------
 cat <<EOF > "$USER_HOME/.local/bin/start_aol.sh"
 #!/bin/bash
 export GTK2_RC_FILES="$USER_HOME/.gtkrc-2.0"
@@ -308,13 +286,9 @@ chmod +x "$USER_HOME/.local/bin/start_aol.sh"
 # ----------------------------------------------------------------------
 # Done
 # ----------------------------------------------------------------------
-echo ""
 echo "==========================================================="
-echo "   AOL 7.0 DESKTOP ENVIRONMENT IS READY"
+echo "   INSTALLATION COMPLETE – NO paplay REQUIRED"
 echo "==========================================================="
-echo "Log out, then choose \"AOL 7.0 Desktop\" from the session menu"
-echo "at the login screen."
-echo ""
-echo "You will hear the real AOL welcome sound and see the giant"
-echo "toolbar with Mail, People, and Internet buttons."
+echo "Log out → choose 'AOL 7.0 Desktop' from the session menu"
+echo "Sound now uses aplay (works silently if no welcome.wav)"
 echo "==========================================================="
